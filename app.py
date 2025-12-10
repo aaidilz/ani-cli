@@ -198,7 +198,19 @@ async def get_episodes(
     """
     try:
         provider_instance = get_provider_instance()
-        episodes = provider_instance.get_episodes(identifier)
+        # Validate and coerce language query parameter
+        if language is None:
+            lang_enum = LanguageTypeEnum.SUB
+        elif language.lower() == "sub":
+            lang_enum = LanguageTypeEnum.SUB
+        elif language.lower() == "dub":
+            lang_enum = LanguageTypeEnum.DUB
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid language '{language}', must be 'sub' or 'dub'",
+            )
+        episodes = provider_instance.get_episodes(identifier, lang_enum)
         
         # Organize episodes by language
         episodes_by_lang: Dict[str, List[EpisodeStreamModel]] = {}
@@ -206,10 +218,11 @@ async def get_episodes(
         for episode_num in episodes:
             episodes_by_lang[str(episode_num)] = []
         
+        info = provider_instance.get_info(identifier)
         return EpisodesResponse(
             identifier=identifier,
-            name="",
-            episodes=episodes_by_lang
+            name=info.name or "",
+            episodes=episodes_by_lang,
         )
     
     except Exception as e:
@@ -236,11 +249,18 @@ async def get_episode_stream(
         provider_instance = get_provider_instance()
         
         # Get streams for the episode
-        streams = provider_instance.get_streams(
-            identifier=identifier,
-            episode=episode,
-            language=LanguageTypeEnum.SUB if language.lower() == "sub" else LanguageTypeEnum.DUB
-        )
+        # provider exposes get_video(...) which returns a list of streams
+        if language.lower() == "sub":
+            lang_enum = LanguageTypeEnum.SUB
+        elif language.lower() == "dub":
+            lang_enum = LanguageTypeEnum.DUB
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid language '{language}', must be 'sub' or 'dub'",
+            )
+
+        streams = provider_instance.get_video(identifier, episode, lang_enum)
         
         stream_list = [
             EpisodeStreamModel(
