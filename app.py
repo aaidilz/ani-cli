@@ -73,6 +73,7 @@ class EpisodeStreamModel(BaseModel):
     resolution: int
     language: str
     subtitle: Optional[Dict[str, Any]] = None
+    referer: Optional[str] = None
 
 
 class EpisodesResponse(BaseModel):
@@ -275,7 +276,8 @@ async def get_episode_stream(
                 url=stream.url,
                 resolution=stream.resolution,
                 language=str(stream.language),
-                subtitle=stream.subtitle if hasattr(stream, 'subtitle') else None
+                subtitle=stream.subtitle if hasattr(stream, 'subtitle') else None,
+                referer=stream.referrer
             )
             for stream in streams
         ]
