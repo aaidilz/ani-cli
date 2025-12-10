@@ -260,7 +260,15 @@ async def get_episode_stream(
                 detail=f"Invalid language '{language}', must be 'sub' or 'dub'",
             )
 
-        streams = provider_instance.get_video(identifier, episode, lang_enum)
+        # Handle episode number formatting
+        # If it's a whole number (e.g. 1.0), convert to int (e.g. 1)
+        # This ensures str(episode) becomes "1" instead of "1.0" which the API expects
+        if episode.is_integer():
+            episode_val = int(episode)
+        else:
+            episode_val = episode
+
+        streams = provider_instance.get_video(identifier, episode_val, lang_enum)
         
         stream_list = [
             EpisodeStreamModel(

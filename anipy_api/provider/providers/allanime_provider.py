@@ -208,6 +208,9 @@ class AllAnimeProvider(BaseProvider):
         )
         result = self._request_page(req).json()
 
+        if not result.get("data") or not result["data"].get("show"):
+            return []
+
         if lang == LanguageTypeEnum.DUB:
             episodes = result["data"]["show"]["availableEpisodesDetail"]["dub"]
         else:
@@ -226,6 +229,10 @@ class AllAnimeProvider(BaseProvider):
             headers={"Referer": "https://allmanga.to/"},
         )
         result = self._request_page(req).json()
+        
+        if not result.get("data") or not result["data"].get("show"):
+            return ProviderInfoResult()
+
         data = result["data"]["show"]
 
         status_map = {"Releasing": Status.ONGOING, "Finished": Status.COMPLETED}
@@ -260,6 +267,9 @@ class AllAnimeProvider(BaseProvider):
             headers={"Referer": "https://allmanga.to/"},
         )
         result = self._request_page(req).json()
+
+        if not result.get("data") or not result["data"].get("episode"):
+            return []
 
         providers = ["Yt-mp4", "Luf-Mp4", "S-Mp4", "Default"]
 
