@@ -2,6 +2,34 @@
 
 A FastAPI application for searching and streaming anime using the AllAnime provider via anipy_api.
 
+## Project Structure
+
+```
+ani-cli/
+├── main.py                 # Main entry point
+├── app/                    # Application package
+│   ├── __init__.py        # FastAPI app factory
+│   ├── config.py          # Configuration settings (SSL enabled)
+│   ├── models.py          # Pydantic models
+│   ├── utils.py           # Utility functions
+│   └── routes/            # API route handlers
+│       ├── __init__.py
+│       ├── root.py        # Root and health endpoints
+│       ├── search.py      # Search and trending endpoints
+│       ├── anime.py       # Anime info and episodes
+│       └── stream.py      # Streaming endpoints
+├── anipy_api/             # External API library
+├── requirements.txt       # Python dependencies
+├── vercel.json           # Vercel deployment config
+└── README.md
+```
+
+## Security Notes
+
+- **SSL/TLS Verification**: Properly enabled for all API requests to ensure secure communication
+- **Input Validation**: All endpoints validate and sanitize input parameters
+- **Error Handling**: Comprehensive error handling prevents information leakage
+
 ## Setup
 
 ### Requirements
@@ -27,7 +55,7 @@ Start the FastAPI server:
 
 ```bash
 source .venv/bin/activate
-python3 -m uvicorn app:app --host 0.0.0.0 --port 8000
+python3 -m uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
 The API will be available at:
@@ -35,9 +63,9 @@ The API will be available at:
 - **Interactive Docs (Swagger UI)**: http://localhost:8000/docs
 - **ReDoc Documentation**: http://localhost:8000/redoc
 
-### Test Script
+### Development Server
 
-Test the anime query functionality:
+For development with auto-reload:
 
 ```bash
 source .venv/bin/activate
@@ -119,10 +147,8 @@ Both provide interactive ways to explore and test all available endpoints.
 
 ## Files
 
-- `app.py` - FastAPI application
-- `main.py` - CLI test script for anipy_api
+- `main.py` - FastAPI application
 - `requirements.txt` - Python dependencies
-- `test_api.py` - API endpoint testing script
 - `.venv/` - Python virtual environment
 
 ## Troubleshooting
@@ -136,19 +162,13 @@ source .venv/bin/activate
 ### Port already in use
 Change the port in the uvicorn command:
 ```bash
-python3 -m uvicorn app:app --host 0.0.0.0 --port 8001
+python3 -m uvicorn main:app --host 0.0.0.0 --port 8001
 ```
-
-### SSL/Certificate errors
-SSL verification is disabled by default for development. To enable it, remove the `provider.session.verify = False` line in `app.py`.
-
 ## Project Structure
 
 ```
 ani-cli/
-├── app.py                    # FastAPI application
-├── main.py                   # CLI test script
-├── test_api.py              # API test script
+├── main.py                    # FastAPI application
 ├── requirements.txt         # Dependencies
 ├── .venv/                   # Virtual environment
 └── anipy_api/              # Anime API library
@@ -162,7 +182,3 @@ ani-cli/
     │   └── utils.py
     └── ...
 ```
-
-## License
-
-This is a wrapper around the anipy-api library for educational purposes.

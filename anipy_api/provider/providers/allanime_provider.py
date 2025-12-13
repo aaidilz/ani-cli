@@ -47,7 +47,8 @@ SEARCH_QURY = """
             {
                 _id,
                 name,
-                availableEpisodes
+                availableEpisodes,
+                thumbnail
             }
         }
     }
@@ -378,6 +379,59 @@ class AllAnimeProvider(BaseProvider):
                         )
                     )
         return streams
+
+    def get_browse(self, page: int = 1, limit: int = 20, genres: List[str] = None) -> dict:
+        variables = {
+            "search": {
+                "allowAdult": False,
+                "allowUnknown": False,
+            },
+            "limit": limit,
+            "page": page,
+            "countryOrigin": "ALL",
+        }
+
+        if genres:
+            variables["search"]["genres"] = genres
+
+        req = Request(
+            "GET",
+            self.API_URL,
+            params={
+                "variables": json.dumps(variables),
+                "query": SEARCH_QURY,
+            },
+            headers={"Referer": "https://allmanga.to/"},
+        )
+
+        res = self._request_page(req).json()
+        provider_results = res.get("data", {}).get("shows", {}).get("edges", [])
+        
+        results = []
+        for a in provider_results:
+            name = a.get("name")
+            identifier = a.get("_id")
+            thumbnail = a.get("thumbnail")
+            
+            languages = []
+            available_episodes = a.get("availableEpisodes", {})
+            if available_episodes.get("sub", 0) > 0:
+                languages.append("sub")
+            if available_episodes.get("dub", 0) > 0:
+                languages.append("dub")
+
+            results.append({
+                "identifier": identifier,
+                "name": name,
+                "image": thumbnail,
+                "languages": languages
+            })
+
+        return {
+            "page": page,
+            "results": results,
+            "has_next": len(results) >= limit  # Simple heuristic
+        }
 
     @staticmethod
     def _decrypt(provider_id: str) -> str:
