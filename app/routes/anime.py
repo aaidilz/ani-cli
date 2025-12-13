@@ -8,11 +8,52 @@ from typing import Optional, Dict, List
 from anipy_api.provider.providers import AllAnimeProvider
 from anipy_api.provider import LanguageTypeEnum
 
-from app.models import AnimeInfoModel, EpisodesResponse, EpisodeStreamModel
+from app.models import AnimeInfoModel, EpisodesResponse, EpisodeStreamModel, PaginatedResponse, AnimeCardModel
 from app.utils import parse_language
 from app.config import get_provider
 
 router = APIRouter()
+
+
+@router.get("/anime/browse", response_model=PaginatedResponse, tags=["Discovery"])
+async def browse_anime(
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(20, ge=1, le=50, description="Items per page"),
+    genres: Optional[List[str]] = Query(None, description="Filter by genres")
+):
+    """
+    Browse anime with pagination and filters
+    """
+    try:
+        provider = get_provider()
+        
+        # Check if provider supports browse
+        if not hasattr(provider, "get_browse"):
+             raise HTTPException(
+                status_code=501,
+                detail="Provider does not support browsing"
+            )
+
+        result = provider.get_browse(page=page, limit=limit, genres=genres)
+        
+        return PaginatedResponse(
+            page=result["page"],
+            has_next=result["has_next"],
+            data=[
+                AnimeCardModel(
+                    identifier=item["identifier"],
+                    name=item["name"],
+                    image=item["image"],
+                    languages=item["languages"]
+                ) for item in result["results"]
+            ]
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to browse anime: {str(e)}"
+        )
 
 
 @router.get("/anime/{identifier}", response_model=AnimeInfoModel, tags=["Anime Info"])
@@ -85,3 +126,5 @@ async def get_episodes(
             status_code=500,
             detail=f"Failed to get episodes: {str(e)}"
         )
+
+

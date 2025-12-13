@@ -51,3 +51,18 @@ class ErrorResponse(BaseModel):
     """Model for error responses"""
     detail: str
     error_type: str
+
+
+class AnimeCardModel(BaseModel):
+    """Model for anime card in list views"""
+    identifier: str
+    name: str
+    image: Optional[str] = None
+    languages: List[str]
+
+
+class PaginatedResponse(BaseModel):
+    """Model for paginated response"""
+    page: int
+    has_next: bool
+    data: List[AnimeCardModel]

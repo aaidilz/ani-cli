@@ -22,7 +22,8 @@ async def root():
             "search": "/search?query=anime_name",
             "info": "/anime/{identifier}",
             "episodes": "/anime/{identifier}/episodes",
-            "stream": "/anime/{identifier}/episode/{episode}/stream"
+            "stream": "/anime/{identifier}/episode/{episode}/stream",
+            "browse": "/anime/browse"
         }
     }
 
