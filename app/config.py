@@ -32,7 +32,10 @@ class Config:
 
 
 def get_provider() -> AllAnimeProvider:
-    """Get configured AllAnime provider instance"""
+    """Get configured AllAnime provider instance
+
+    Note: SSL verification is enabled by default for security.
+    The AllAnime API supports proper SSL certificates.
+    """
     provider = AllAnimeProvider()
-    provider.session.verify = False
     return provider

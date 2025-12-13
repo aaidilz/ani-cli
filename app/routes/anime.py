@@ -10,6 +10,7 @@ from anipy_api.provider import LanguageTypeEnum
 
 from app.models import AnimeInfoModel, EpisodesResponse, EpisodeStreamModel
 from app.utils import parse_language
+from app.config import get_provider
 
 router = APIRouter()
 
@@ -24,8 +25,7 @@ async def get_anime_info(
     - **identifier**: The anime identifier from search results
     """
     try:
-        provider = AllAnimeProvider()
-        provider.session.verify = False
+        provider = get_provider()
 
         info = provider.get_info(identifier)
 
@@ -58,8 +58,7 @@ async def get_episodes(
     - **language**: Optional filter for language (sub or dub)
     """
     try:
-        provider = AllAnimeProvider()
-        provider.session.verify = False
+        provider = get_provider()
 
         # Validate and coerce language query parameter
         lang_enum = parse_language(language) if language else LanguageTypeEnum.SUB

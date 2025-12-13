@@ -8,6 +8,7 @@ from anipy_api.provider.providers import AllAnimeProvider
 
 from app.models import EpisodeStreamModel
 from app.utils import parse_language, format_episode_number
+from app.config import get_provider
 
 router = APIRouter()
 
@@ -26,8 +27,7 @@ async def get_episode_stream(
     - **language**: Language (sub or dub)
     """
     try:
-        provider = AllAnimeProvider()
-        provider.session.verify = False
+        provider = get_provider()
 
         # Parse language
         lang_enum = parse_language(language)

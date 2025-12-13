@@ -3,11 +3,13 @@ Search routes for Ani-CLI FastAPI application
 """
 
 from fastapi import APIRouter, HTTPException, Query
-from typing import List
+from typing import List, Optional
 
 from anipy_api.provider.providers import AllAnimeProvider
+from anipy_api.provider.filter import Filters, Status
 
 from app.models import SearchResponse, SearchResultModel
+from app.config import get_provider
 
 router = APIRouter()
 
@@ -24,8 +26,7 @@ async def search_anime(
     - **limit**: Maximum number of results (1-50)
     """
     try:
-        provider = AllAnimeProvider()
-        provider.session.verify = False
+        provider = get_provider()
 
         results = provider.get_search(query)
 
