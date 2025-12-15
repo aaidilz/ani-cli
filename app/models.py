@@ -59,6 +59,7 @@ class AnimeCardModel(BaseModel):
     name: str
     image: Optional[str] = None
     languages: List[str]
+    genres: Optional[List[str]] = None
 
 
 class PaginatedResponse(BaseModel):
