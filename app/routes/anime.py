@@ -4,12 +4,13 @@ Anime routes for Ani-CLI FastAPI application
 
 from fastapi import APIRouter, HTTPException, Path, Query
 from typing import Optional, Dict, List
+from concurrent.futures import ThreadPoolExecutor
 
 from anipy_api.provider.providers import AllAnimeProvider
 from anipy_api.provider import LanguageTypeEnum
 
 from app.models import AnimeInfoModel, EpisodesResponse, EpisodeStreamModel, PaginatedResponse, AnimeCardModel
-from app.utils import parse_language
+from app.utils import parse_language, get_jikan_image
 from app.config import get_provider
 
 router = APIRouter()
@@ -35,6 +36,21 @@ async def browse_anime(
             )
 
         result = provider.get_browse(page=page, limit=limit, genres=genres)
+        
+        # Fetch images from Jikan in parallel
+        with ThreadPoolExecutor() as executor:
+            # Create a list of futures
+            futures = {
+                executor.submit(get_jikan_image, item["name"]): item 
+                for item in result["results"]
+            }
+            
+            # Collect results
+            for future in futures:
+                item = futures[future]
+                jikan_image = future.result()
+                if jikan_image:
+                    item["image"] = jikan_image
         
         return PaginatedResponse(
             page=result["page"],
