@@ -48,7 +48,8 @@ SEARCH_QURY = """
                 _id,
                 name,
                 availableEpisodes,
-                thumbnail
+                thumbnail,
+                genres
             }
         }
     }
@@ -412,6 +413,7 @@ class AllAnimeProvider(BaseProvider):
             name = a.get("name")
             identifier = a.get("_id")
             thumbnail = a.get("thumbnail")
+            genres_list = a.get("genres", [])
             
             languages = []
             available_episodes = a.get("availableEpisodes", {})
@@ -424,7 +426,8 @@ class AllAnimeProvider(BaseProvider):
                 "identifier": identifier,
                 "name": name,
                 "image": thumbnail,
-                "languages": languages
+                "languages": languages,
+                "genres": genres_list
             })
 
         return {

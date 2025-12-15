@@ -44,7 +44,8 @@ async def browse_anime(
                     identifier=item["identifier"],
                     name=item["name"],
                     image=item["image"],
-                    languages=item["languages"]
+                    languages=item["languages"],
+                    genres=item.get("genres")
                 ) for item in result["results"]
             ]
         )
