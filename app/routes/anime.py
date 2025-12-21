@@ -37,20 +37,25 @@ async def browse_anime(
 
         result = provider.get_browse(page=page, limit=limit, genres=genres)
         
-        # Fetch images from Jikan in parallel
+        # Fetch images from Jikan in parallel for items with missing or invalid images
         with ThreadPoolExecutor() as executor:
-            # Create a list of futures
-            futures = {
-                executor.submit(get_jikan_image, item["name"]): item 
-                for item in result["results"]
-            }
+            futures = {}
+            for item in result["results"]:
+                image_url = item.get("image")
+                # Check if image is missing, empty, or not an absolute URL (doesn't start with http)
+                if not image_url or not image_url.strip().lower().startswith("http"):
+                    futures[executor.submit(get_jikan_image, item["name"])] = item
             
             # Collect results
             for future in futures:
                 item = futures[future]
                 jikan_image = future.result()
                 if jikan_image:
+                    print(f"[DEBUG] Updated image for '{item['name']}' -> {jikan_image}")
                     item["image"] = jikan_image
+                else:
+                    print(f"[DEBUG] Jikan failed for '{item['name']}', clearing invalid image")
+                    item["image"] = None
         
         return PaginatedResponse(
             page=result["page"],
