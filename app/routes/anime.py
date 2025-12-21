@@ -10,7 +10,7 @@ from anipy_api.provider.providers import AllAnimeProvider
 from anipy_api.provider import LanguageTypeEnum
 
 from app.models import AnimeInfoModel, EpisodesResponse, EpisodeStreamModel, PaginatedResponse, AnimeCardModel
-from app.utils import parse_language, get_jikan_image
+from app.utils import parse_language, get_jikan_image, get_jikan_total_episodes, get_jikan_rating
 from app.config import get_provider
 
 router = APIRouter()
@@ -92,6 +92,19 @@ async def get_anime_info(
 
         info = provider.get_info(identifier)
 
+        # Best-effort: try to fetch total episodes and ratings from Jikan by name
+        total_eps = None
+        rating_score = None
+        rating_count = None
+        rating_classification = None
+
+        if getattr(info, "name", None):
+            total_eps = get_jikan_total_episodes(info.name)
+            score, scored_by, rating_str = get_jikan_rating(info.name)
+            rating_score = score
+            rating_count = scored_by
+            rating_classification = rating_str
+
         return AnimeInfoModel(
             name=info.name,
             image=info.image,
@@ -99,7 +112,11 @@ async def get_anime_info(
             synopsis=info.synopsis,
             release_year=info.release_year,
             status=str(info.status) if info.status else None,
-            alternative_names=info.alternative_names
+            alternative_names=info.alternative_names,
+            total_episode=total_eps,
+            rating_score=rating_score,
+            rating_count=rating_count,
+            rating_classification=rating_classification,
         )
 
     except Exception as e:
