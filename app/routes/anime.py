@@ -57,18 +57,36 @@ async def browse_anime(
                     print(f"[DEBUG] Jikan failed for '{item['name']}', clearing invalid image")
                     item["image"] = None
         
-        return PaginatedResponse(
-            page=result["page"],
-            has_next=result["has_next"],
-            data=[
+        data_list = []
+        for item in result["results"]:
+            total_eps = None
+            rating_score = None
+            rating_classification = None
+            try:
+                total_eps = get_jikan_total_episodes(item["name"])
+                score, _, rating_str = get_jikan_rating(item["name"])
+                rating_score = score
+                rating_classification = rating_str
+            except Exception:
+                pass
+
+            data_list.append(
                 AnimeCardModel(
                     identifier=item["identifier"],
                     name=item["name"],
                     image=item["image"],
                     languages=item["languages"],
-                    genres=item.get("genres")
-                ) for item in result["results"]
-            ]
+                    genres=item.get("genres"),
+                    total_episode=total_eps,
+                    rating_score=rating_score,
+                    rating_classification=rating_classification,
+                )
+            )
+
+        return PaginatedResponse(
+            page=result["page"],
+            has_next=result["has_next"],
+            data=data_list
         )
 
     except Exception as e:

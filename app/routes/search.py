@@ -10,6 +10,7 @@ from anipy_api.provider.filter import Filters, Status
 
 from app.models import SearchResponse, SearchResultModel
 from app.config import get_provider
+from app.utils import get_jikan_total_episodes, get_jikan_rating, get_jikan_image
 
 router = APIRouter()
 
@@ -33,14 +34,52 @@ async def search_anime(
         # Limit results
         limited_results = results[:limit]
 
-        search_results = [
-            SearchResultModel(
-                name=result.name,
-                identifier=result.identifier,
-                languages=[str(lang) for lang in result.languages]
+        search_results = []
+        for result in limited_results:
+            total_eps = None
+            rating_score = None
+            rating_classification = None
+            image_url = None
+
+            # best-effort: fetch metadata from Jikan
+            try:
+                total_eps = get_jikan_total_episodes(result.name)
+                score, _, rating_str = get_jikan_rating(result.name)
+                rating_score = score
+                rating_classification = rating_str
+            except Exception:
+                pass
+
+            # try to get image from provider result first (support attribute or dict), fallback to Jikan
+            try:
+                image_url = getattr(result, "image", None)
+            except Exception:
+                image_url = None
+
+            if not image_url:
+                try:
+                    if isinstance(result, dict):
+                        image_url = result.get("image")
+                except Exception:
+                    image_url = None
+
+            if not image_url:
+                try:
+                    image_url = get_jikan_image(result.name)
+                except Exception:
+                    image_url = None
+
+            search_results.append(
+                SearchResultModel(
+                    name=result.name,
+                    identifier=result.identifier,
+                    image=image_url,
+                    languages=[str(lang) for lang in result.languages],
+                    total_episode=total_eps,
+                    rating_score=rating_score,
+                    rating_classification=rating_classification,
+                )
             )
-            for result in limited_results
-        ]
 
         return SearchResponse(
             query=query,
