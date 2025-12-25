@@ -4,6 +4,8 @@ Stream routes for Ani-CLI FastAPI application
 
 from fastapi import APIRouter, HTTPException, Path, Query
 
+from starlette.concurrency import run_in_threadpool
+
 from anipy_api.provider.providers import AllAnimeProvider
 
 from app.models import EpisodeStreamModel
@@ -35,7 +37,7 @@ async def get_episode_stream(
         # Format episode number
         episode_val = format_episode_number(episode)
 
-        streams = provider.get_video(identifier, episode_val, lang_enum)
+        streams = await run_in_threadpool(provider.get_video, identifier, episode_val, lang_enum)
 
         stream_list = [
             EpisodeStreamModel(

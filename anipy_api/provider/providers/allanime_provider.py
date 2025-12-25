@@ -146,7 +146,11 @@ class AllAnimeProvider(BaseProvider):
     API_URL: str = BASE_URL.replace("//", "//api.") + "/api"
 
     def get_search(
-        self, query: str, filters: "Filters" = Filters()
+        self,
+        query: str,
+        filters: "Filters" = Filters(),
+        max_pages: int | None = 1,
+        max_results: int | None = 80,
     ) -> List[ProviderSearchResult]:
         req = Request(
             "GET",
@@ -164,7 +168,7 @@ class AllAnimeProvider(BaseProvider):
         )
         req = AllAnimeFilter(req).apply(query, filters)
 
-        results = []
+        results: List[ProviderSearchResult] = []
         page = 1
         while True:
             req.params["variables"]["page"] = page
@@ -185,10 +189,25 @@ class AllAnimeProvider(BaseProvider):
 
                 results.append(
                     ProviderSearchResult(
-                        identifier=identifier, name=name, languages=languages
+                        identifier=identifier,
+                        name=name,
+                        languages=languages,
+                        image=a.get("thumbnail"),
+                        genres=a.get("genres"),
+                        available_episodes=a.get("availableEpisodes"),
                     )
                 )
+
+                if max_results is not None and len(results) >= max_results:
+                    break
+
+            if max_results is not None and len(results) >= max_results:
+                break
+
             page += 1
+
+            if max_pages is not None and page > max_pages:
+                break
 
         # The results are not sorted properly so sort by best match to query
         results.sort(
@@ -427,7 +446,8 @@ class AllAnimeProvider(BaseProvider):
                 "name": name,
                 "image": thumbnail,
                 "languages": languages,
-                "genres": genres_list
+                "genres": genres_list,
+                "available_episodes": available_episodes,
             })
 
         return {

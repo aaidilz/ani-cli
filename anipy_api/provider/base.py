@@ -43,6 +43,9 @@ class ProviderSearchResult:
     identifier: str
     name: str
     languages: Set[LanguageTypeEnum]
+    image: Optional[str] = None
+    genres: Optional[List[str]] = None
+    available_episodes: Optional[Dict[str, int]] = None
 
     def __hash__(self) -> int:
         return hash(self.identifier)

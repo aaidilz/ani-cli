@@ -2,9 +2,12 @@
 Anime routes for Ani-CLI FastAPI application
 """
 
+import asyncio
 from fastapi import APIRouter, HTTPException, Path, Query
 from typing import Optional, Dict, List
 from concurrent.futures import ThreadPoolExecutor
+
+from starlette.concurrency import run_in_threadpool
 
 from anipy_api.provider.providers import AllAnimeProvider
 from anipy_api.provider import LanguageTypeEnum
@@ -18,6 +21,7 @@ from app.utils import (
     get_kitsu_age_rating,
 )
 from app.config import get_provider
+from app.cache import BROWSE_CACHE
 
 router = APIRouter()
 
@@ -41,10 +45,17 @@ async def browse_anime(
                 detail="Provider does not support browsing"
             )
 
-        result = provider.get_browse(page=page, limit=limit, genres=genres)
+        genres_key = tuple(genres) if genres else None
+        key = (page, limit, genres_key)
+        cached = BROWSE_CACHE.get(key)
+        if cached is not None:
+            result = cached
+        else:
+            result = await run_in_threadpool(provider.get_browse, page, limit, genres)
+            BROWSE_CACHE.set(key, result)
         
         # Fetch images from Jikan in parallel for items with missing or invalid images
-        with ThreadPoolExecutor() as executor:
+        with ThreadPoolExecutor(max_workers=10) as executor:
             futures = {}
             for item in result["results"]:
                 image_url = item.get("image")
@@ -57,34 +68,48 @@ async def browse_anime(
                 item = futures[future]
                 jikan_image = future.result()
                 if jikan_image:
-                    print(f"[DEBUG] Updated image for '{item['name']}' -> {jikan_image}")
                     item["image"] = jikan_image
                 else:
-                    print(f"[DEBUG] Jikan failed for '{item['name']}', clearing invalid image")
                     item["image"] = None
         
-        data_list = []
-        for item in result["results"]:
-            total_eps = None
-            rating_score = None
-            rating_classification = None
-            try:
-                total_eps = get_jikan_total_episodes(item["name"])
-            except Exception:
+        semaphore = asyncio.Semaphore(10)
+
+        async def build_card(item: dict) -> AnimeCardModel:
+            async with semaphore:
+                # Prefer provider episode counts if present to avoid Jikan fan-out.
                 total_eps = None
+                available = item.get("available_episodes")
+                if isinstance(available, dict):
+                    try:
+                        sub_count = available.get("sub")
+                        dub_count = available.get("dub")
+                        candidates = [c for c in [sub_count, dub_count] if isinstance(c, int)]
+                        total_eps = max(candidates) if candidates else None
+                    except Exception:
+                        total_eps = None
 
-            try:
-                rating_score = get_anilist_score(item["name"])
-            except Exception:
-                rating_score = None
+                rating_score_task = run_in_threadpool(get_anilist_score, item["name"])
+                rating_class_task = run_in_threadpool(get_kitsu_age_rating, item["name"])
+                total_eps_task = (
+                    run_in_threadpool(get_jikan_total_episodes, item["name"])
+                    if total_eps is None
+                    else None
+                )
 
-            try:
-                rating_classification = get_kitsu_age_rating(item["name"]) 
-            except Exception:
-                rating_classification = None
+                if total_eps_task is not None:
+                    rating_score, rating_classification, total_eps_fallback = await asyncio.gather(
+                        rating_score_task,
+                        rating_class_task,
+                        total_eps_task,
+                    )
+                    total_eps = total_eps_fallback
+                else:
+                    rating_score, rating_classification = await asyncio.gather(
+                        rating_score_task,
+                        rating_class_task,
+                    )
 
-            data_list.append(
-                AnimeCardModel(
+                return AnimeCardModel(
                     identifier=item["identifier"],
                     name=item["name"],
                     image=item["image"],
@@ -94,7 +119,8 @@ async def browse_anime(
                     rating_score=rating_score,
                     rating_classification=rating_classification,
                 )
-            )
+
+        data_list = await asyncio.gather(*(build_card(item) for item in result["results"]))
 
         return PaginatedResponse(
             page=result["page"],
@@ -121,7 +147,7 @@ async def get_anime_info(
     try:
         provider = get_provider()
 
-        info = provider.get_info(identifier)
+        info = await run_in_threadpool(provider.get_info, identifier)
 
         # Best-effort: try to fetch total episodes from Jikan and ratings from AniList/Kitsu by name
         total_eps = None
@@ -130,19 +156,16 @@ async def get_anime_info(
         rating_classification = None
 
         if getattr(info, "name", None):
-            try:
-                total_eps = get_jikan_total_episodes(info.name)
-            except Exception:
-                total_eps = None
-            try:
-                rating_score = get_anilist_score(info.name)
-            except Exception:
-                rating_score = None
+            total_eps_task = run_in_threadpool(get_jikan_total_episodes, info.name)
+            rating_score_task = run_in_threadpool(get_anilist_score, info.name)
+            rating_class_task = run_in_threadpool(get_kitsu_age_rating, info.name)
+
+            total_eps, rating_score, rating_classification = await asyncio.gather(
+                total_eps_task,
+                rating_score_task,
+                rating_class_task,
+            )
             # We don't have a strict scored_by equivalent without Jikan; leave None
-            try:
-                rating_classification = get_kitsu_age_rating(info.name)
-            except Exception:
-                rating_classification = None
 
         return AnimeInfoModel(
             name=info.name,
@@ -182,7 +205,7 @@ async def get_episodes(
         # Validate and coerce language query parameter
         lang_enum = parse_language(language) if language else LanguageTypeEnum.SUB
 
-        episodes = provider.get_episodes(identifier, lang_enum)
+        episodes = await run_in_threadpool(provider.get_episodes, identifier, lang_enum)
 
         # Organize episodes by language
         episodes_by_lang: Dict[str, List[EpisodeStreamModel]] = {}
@@ -190,7 +213,7 @@ async def get_episodes(
         for episode_num in episodes:
             episodes_by_lang[str(episode_num)] = []
 
-        info = provider.get_info(identifier)
+        info = await run_in_threadpool(provider.get_info, identifier)
         return EpisodesResponse(
             identifier=identifier,
             name=info.name or "",
