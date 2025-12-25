@@ -153,6 +153,12 @@ Both provide interactive ways to explore and test all available endpoints.
 
 ## Troubleshooting
 
+### Swagger UI shows "Failed to fetch"
+
+- If you started Uvicorn with `--host 0.0.0.0`, **do not** open `http://0.0.0.0:8000/docs` in your browser.
+  Use `http://localhost:8000/docs` or `http://127.0.0.1:8000/docs` instead.
+- If you open Swagger UI from a different origin (different domain/port), configure CORS in [app/config.py](app/config.py) to include that origin.
+
 ### Import errors
 If you get import errors, make sure the virtual environment is activated:
 ```bash

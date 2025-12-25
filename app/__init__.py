@@ -34,6 +34,7 @@ def create_app() -> FastAPI:
         allow_credentials=Config.ALLOW_CREDENTIALS,
         allow_methods=Config.ALLOW_METHODS,
         allow_headers=Config.ALLOW_HEADERS,
+        allow_origin_regex=".*",
     )
 
     # Include routers

@@ -22,7 +22,9 @@ class Config:
 
     # CORS settings
     ALLOW_ORIGINS = ["*"]
-    ALLOW_CREDENTIALS = True
+    # If you need cookies/Authorization credentials from a browser, replace
+    # ALLOW_ORIGINS with explicit domains and set this back to True.
+    ALLOW_CREDENTIALS = False
     ALLOW_METHODS = ["*"]
     ALLOW_HEADERS = ["*"]
 
