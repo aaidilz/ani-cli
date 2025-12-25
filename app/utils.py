@@ -82,3 +82,63 @@ def get_jikan_rating(anime_name: str) -> Tuple[Optional[float], Optional[int], O
         return None, None, None
     except Exception:
         return None, None, None
+
+
+@lru_cache(maxsize=128)
+def get_anilist_score(anime_name: str) -> Optional[float]:
+    """Fetch average score from AniList GraphQL and normalize to 0-10.
+
+    Returns a float score (0-10) or None if unavailable.
+    """
+    try:
+        url = "https://graphql.anilist.co"
+        query = (
+            "query ($search: String) {"
+            "  Media(search: $search, type: ANIME) {"
+            "    averageScore"
+            "    meanScore"
+            "  }"
+            "}"
+        )
+        payload = {"query": query, "variables": {"search": anime_name}}
+        headers = {"Content-Type": "application/json", "Accept": "application/json"}
+        response = requests.post(url, json=payload, headers=headers, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        media = data.get("data", {}).get("Media")
+        if media:
+            score100 = media.get("averageScore") or media.get("meanScore")
+            if isinstance(score100, (int, float)):
+                return float(score100) / 10.0
+        return None
+    except Exception:
+        return None
+
+
+@lru_cache(maxsize=128)
+def get_kitsu_age_rating(anime_name: str) -> Optional[str]:
+    """Fetch age rating classification from Kitsu API v2.
+
+    Maps Kitsu ratings to readable strings.
+    """
+    try:
+        url = "https://kitsu.io/api/edge/anime"
+        params = {"filter[text]": anime_name, "page[limit]": 1}
+        response = requests.get(url, params=params, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        if data.get("data"):
+            attrs = data["data"][0].get("attributes", {})
+            rating = attrs.get("ageRating")  # G, PG, R, R18
+            if not rating:
+                return None
+            mapping = {
+                "G": "G - All Ages",
+                "PG": "PG - Children",
+                "R": "R - 17+",
+                "R18": "R18+ - Adults Only",
+            }
+            return mapping.get(str(rating).upper(), str(rating))
+        return None
+    except Exception:
+        return None

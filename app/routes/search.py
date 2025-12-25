@@ -10,7 +10,13 @@ from anipy_api.provider.filter import Filters, Status
 
 from app.models import SearchResponse, SearchResultModel
 from app.config import get_provider
-from app.utils import get_jikan_total_episodes, get_jikan_rating, get_jikan_image
+from app.utils import (
+    get_jikan_total_episodes,
+    get_jikan_image,
+    get_anilist_score,
+    get_kitsu_age_rating,
+)
+from anipy_api.provider import LanguageTypeEnum
 
 router = APIRouter()
 
@@ -41,12 +47,29 @@ async def search_anime(
             rating_classification = None
             image_url = None
 
-            # best-effort: fetch metadata from Jikan
+            # Prefer total episodes from provider episodes list (same source as /anime/{identifier}/episodes)
             try:
-                total_eps = get_jikan_total_episodes(result.name)
-                score, _, rating_str = get_jikan_rating(result.name)
-                rating_score = score
-                rating_classification = rating_str
+                eps_list = provider.get_episodes(result.identifier, LanguageTypeEnum.SUB)
+                if eps_list:
+                    total_eps = len(eps_list)
+            except Exception:
+                total_eps = None
+
+            # Ratings without Jikan: AniList for score, Kitsu for age classification
+            try:
+                rating_score = get_anilist_score(result.name)
+            except Exception:
+                rating_score = None
+
+            try:
+                rating_classification = get_kitsu_age_rating(result.name)
+            except Exception:
+                rating_classification = None
+
+            # As a last resort only for total episodes, still allow Jikan fallback
+            try:
+                if total_eps is None:
+                    total_eps = get_jikan_total_episodes(result.name)
             except Exception:
                 pass
 

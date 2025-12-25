@@ -10,7 +10,13 @@ from anipy_api.provider.providers import AllAnimeProvider
 from anipy_api.provider import LanguageTypeEnum
 
 from app.models import AnimeInfoModel, EpisodesResponse, EpisodeStreamModel, PaginatedResponse, AnimeCardModel
-from app.utils import parse_language, get_jikan_image, get_jikan_total_episodes, get_jikan_rating
+from app.utils import (
+    parse_language,
+    get_jikan_image,
+    get_jikan_total_episodes,
+    get_anilist_score,
+    get_kitsu_age_rating,
+)
 from app.config import get_provider
 
 router = APIRouter()
@@ -64,11 +70,18 @@ async def browse_anime(
             rating_classification = None
             try:
                 total_eps = get_jikan_total_episodes(item["name"])
-                score, _, rating_str = get_jikan_rating(item["name"])
-                rating_score = score
-                rating_classification = rating_str
             except Exception:
-                pass
+                total_eps = None
+
+            try:
+                rating_score = get_anilist_score(item["name"])
+            except Exception:
+                rating_score = None
+
+            try:
+                rating_classification = get_kitsu_age_rating(item["name"]) 
+            except Exception:
+                rating_classification = None
 
             data_list.append(
                 AnimeCardModel(
@@ -110,18 +123,26 @@ async def get_anime_info(
 
         info = provider.get_info(identifier)
 
-        # Best-effort: try to fetch total episodes and ratings from Jikan by name
+        # Best-effort: try to fetch total episodes from Jikan and ratings from AniList/Kitsu by name
         total_eps = None
         rating_score = None
         rating_count = None
         rating_classification = None
 
         if getattr(info, "name", None):
-            total_eps = get_jikan_total_episodes(info.name)
-            score, scored_by, rating_str = get_jikan_rating(info.name)
-            rating_score = score
-            rating_count = scored_by
-            rating_classification = rating_str
+            try:
+                total_eps = get_jikan_total_episodes(info.name)
+            except Exception:
+                total_eps = None
+            try:
+                rating_score = get_anilist_score(info.name)
+            except Exception:
+                rating_score = None
+            # We don't have a strict scored_by equivalent without Jikan; leave None
+            try:
+                rating_classification = get_kitsu_age_rating(info.name)
+            except Exception:
+                rating_classification = None
 
         return AnimeInfoModel(
             name=info.name,
