@@ -10,6 +10,13 @@ from anipy_api.provider.filter import Filters, Status
 
 from app.models import SearchResponse, SearchResultModel
 from app.config import get_provider
+from app.utils import (
+    get_jikan_total_episodes,
+    get_jikan_image,
+    get_anilist_score,
+    get_kitsu_age_rating,
+)
+from anipy_api.provider import LanguageTypeEnum
 
 router = APIRouter()
 
@@ -33,14 +40,69 @@ async def search_anime(
         # Limit results
         limited_results = results[:limit]
 
-        search_results = [
-            SearchResultModel(
-                name=result.name,
-                identifier=result.identifier,
-                languages=[str(lang) for lang in result.languages]
+        search_results = []
+        for result in limited_results:
+            total_eps = None
+            rating_score = None
+            rating_classification = None
+            image_url = None
+
+            # Prefer total episodes from provider episodes list (same source as /anime/{identifier}/episodes)
+            try:
+                eps_list = provider.get_episodes(result.identifier, LanguageTypeEnum.SUB)
+                if eps_list:
+                    total_eps = len(eps_list)
+            except Exception:
+                total_eps = None
+
+            # Ratings without Jikan: AniList for score, Kitsu for age classification
+            try:
+                rating_score = get_anilist_score(result.name)
+            except Exception:
+                rating_score = None
+
+            try:
+                rating_classification = get_kitsu_age_rating(result.name)
+            except Exception:
+                rating_classification = None
+
+            # As a last resort only for total episodes, still allow Jikan fallback
+            try:
+                if total_eps is None:
+                    total_eps = get_jikan_total_episodes(result.name)
+            except Exception:
+                pass
+
+            # try to get image from provider result first (support attribute or dict), fallback to Jikan
+            try:
+                image_url = getattr(result, "image", None)
+            except Exception:
+                image_url = None
+
+            if not image_url:
+                try:
+                    if isinstance(result, dict):
+                        image_url = result.get("image")
+                except Exception:
+                    image_url = None
+
+            if not image_url:
+                try:
+                    image_url = get_jikan_image(result.name)
+                except Exception:
+                    image_url = None
+
+            search_results.append(
+                SearchResultModel(
+                    name=result.name,
+                    identifier=result.identifier,
+                    image=image_url,
+                    languages=[str(lang) for lang in result.languages],
+                    total_episode=total_eps,
+                    rating_score=rating_score,
+                    rating_classification=rating_classification,
+                )
             )
-            for result in limited_results
-        ]
 
         return SearchResponse(
             query=query,

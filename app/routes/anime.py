@@ -10,7 +10,13 @@ from anipy_api.provider.providers import AllAnimeProvider
 from anipy_api.provider import LanguageTypeEnum
 
 from app.models import AnimeInfoModel, EpisodesResponse, EpisodeStreamModel, PaginatedResponse, AnimeCardModel
-from app.utils import parse_language, get_jikan_image
+from app.utils import (
+    parse_language,
+    get_jikan_image,
+    get_jikan_total_episodes,
+    get_anilist_score,
+    get_kitsu_age_rating,
+)
 from app.config import get_provider
 
 router = APIRouter()
@@ -37,33 +43,63 @@ async def browse_anime(
 
         result = provider.get_browse(page=page, limit=limit, genres=genres)
         
-        # Fetch images from Jikan in parallel
+        # Fetch images from Jikan in parallel for items with missing or invalid images
         with ThreadPoolExecutor() as executor:
-            # Create a list of futures
-            futures = {
-                executor.submit(get_jikan_image, item["name"]): item 
-                for item in result["results"]
-            }
+            futures = {}
+            for item in result["results"]:
+                image_url = item.get("image")
+                # Check if image is missing, empty, or not an absolute URL (doesn't start with http)
+                if not image_url or not image_url.strip().lower().startswith("http"):
+                    futures[executor.submit(get_jikan_image, item["name"])] = item
             
             # Collect results
             for future in futures:
                 item = futures[future]
                 jikan_image = future.result()
                 if jikan_image:
+                    print(f"[DEBUG] Updated image for '{item['name']}' -> {jikan_image}")
                     item["image"] = jikan_image
+                else:
+                    print(f"[DEBUG] Jikan failed for '{item['name']}', clearing invalid image")
+                    item["image"] = None
         
-        return PaginatedResponse(
-            page=result["page"],
-            has_next=result["has_next"],
-            data=[
+        data_list = []
+        for item in result["results"]:
+            total_eps = None
+            rating_score = None
+            rating_classification = None
+            try:
+                total_eps = get_jikan_total_episodes(item["name"])
+            except Exception:
+                total_eps = None
+
+            try:
+                rating_score = get_anilist_score(item["name"])
+            except Exception:
+                rating_score = None
+
+            try:
+                rating_classification = get_kitsu_age_rating(item["name"]) 
+            except Exception:
+                rating_classification = None
+
+            data_list.append(
                 AnimeCardModel(
                     identifier=item["identifier"],
                     name=item["name"],
                     image=item["image"],
                     languages=item["languages"],
-                    genres=item.get("genres")
-                ) for item in result["results"]
-            ]
+                    genres=item.get("genres"),
+                    total_episode=total_eps,
+                    rating_score=rating_score,
+                    rating_classification=rating_classification,
+                )
+            )
+
+        return PaginatedResponse(
+            page=result["page"],
+            has_next=result["has_next"],
+            data=data_list
         )
 
     except Exception as e:
@@ -87,6 +123,27 @@ async def get_anime_info(
 
         info = provider.get_info(identifier)
 
+        # Best-effort: try to fetch total episodes from Jikan and ratings from AniList/Kitsu by name
+        total_eps = None
+        rating_score = None
+        rating_count = None
+        rating_classification = None
+
+        if getattr(info, "name", None):
+            try:
+                total_eps = get_jikan_total_episodes(info.name)
+            except Exception:
+                total_eps = None
+            try:
+                rating_score = get_anilist_score(info.name)
+            except Exception:
+                rating_score = None
+            # We don't have a strict scored_by equivalent without Jikan; leave None
+            try:
+                rating_classification = get_kitsu_age_rating(info.name)
+            except Exception:
+                rating_classification = None
+
         return AnimeInfoModel(
             name=info.name,
             image=info.image,
@@ -94,7 +151,11 @@ async def get_anime_info(
             synopsis=info.synopsis,
             release_year=info.release_year,
             status=str(info.status) if info.status else None,
-            alternative_names=info.alternative_names
+            alternative_names=info.alternative_names,
+            total_episode=total_eps,
+            rating_score=rating_score,
+            rating_count=rating_count,
+            rating_classification=rating_classification,
         )
 
     except Exception as e:

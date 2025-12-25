@@ -10,7 +10,11 @@ class SearchResultModel(BaseModel):
     """Model for search results"""
     name: str
     identifier: str
+    image: Optional[str] = None
     languages: List[str]
+    total_episode: Optional[int] = None
+    rating_score: Optional[float] = None
+    rating_classification: Optional[str] = None
 
 
 class SearchResponse(BaseModel):
@@ -29,6 +33,10 @@ class AnimeInfoModel(BaseModel):
     release_year: Optional[int] = None
     status: Optional[str] = None
     alternative_names: Optional[List[str]] = None
+    total_episode: Optional[int] = None
+    rating_score: Optional[float] = None
+    rating_count: Optional[int] = None
+    rating_classification: Optional[str] = None
 
 
 class EpisodeStreamModel(BaseModel):
@@ -60,6 +68,9 @@ class AnimeCardModel(BaseModel):
     image: Optional[str] = None
     languages: List[str]
     genres: Optional[List[str]] = None
+    total_episode: Optional[int] = None
+    rating_score: Optional[float] = None
+    rating_classification: Optional[str] = None
 
 
 class PaginatedResponse(BaseModel):
