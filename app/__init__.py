@@ -13,6 +13,7 @@ from app.routes.root import router as root_router
 from app.routes.search import router as search_router
 from app.routes.anime import router as anime_router
 from app.routes.stream import router as stream_router
+from app.routes.popular import router as popular_router
 
 
 def create_app() -> FastAPI:
@@ -42,6 +43,7 @@ def create_app() -> FastAPI:
     app.include_router(search_router)
     app.include_router(anime_router)
     app.include_router(stream_router)
+    app.include_router(popular_router)
 
     # Exception handlers
     @app.exception_handler(HTTPException)
