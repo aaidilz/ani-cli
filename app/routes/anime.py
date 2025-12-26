@@ -5,7 +5,6 @@ Anime routes for Ani-CLI FastAPI application
 import asyncio
 from fastapi import APIRouter, HTTPException, Path, Query
 from typing import Optional, Dict, List
-from concurrent.futures import ThreadPoolExecutor
 
 from starlette.concurrency import run_in_threadpool
 
@@ -15,7 +14,6 @@ from anipy_api.provider import LanguageTypeEnum
 from app.models import AnimeInfoModel, EpisodesResponse, EpisodeStreamModel, PaginatedResponse, AnimeCardModel
 from app.utils import (
     parse_language,
-    get_jikan_image,
     get_jikan_total_episodes,
     get_anilist_score,
     get_kitsu_age_rating,
@@ -54,73 +52,32 @@ async def browse_anime(
             result = await run_in_threadpool(provider.get_browse, page, limit, genres)
             BROWSE_CACHE.set(key, result)
         
-        # Fetch images from Jikan in parallel for items with missing or invalid images
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = {}
-            for item in result["results"]:
-                image_url = item.get("image")
-                # Check if image is missing, empty, or not an absolute URL (doesn't start with http)
-                if not image_url or not image_url.strip().lower().startswith("http"):
-                    futures[executor.submit(get_jikan_image, item["name"])] = item
-            
-            # Collect results
-            for future in futures:
-                item = futures[future]
-                jikan_image = future.result()
-                if jikan_image:
-                    item["image"] = jikan_image
-                else:
-                    item["image"] = None
-        
-        semaphore = asyncio.Semaphore(10)
+        data_list = []
+        for item in result["results"]:
+            # Calculate total episodes from available_episodes
+            total_eps = None
+            available = item.get("available_episodes")
+            if isinstance(available, dict):
+                try:
+                    sub_count = available.get("sub")
+                    dub_count = available.get("dub")
+                    candidates = [c for c in [sub_count, dub_count] if isinstance(c, int)]
+                    total_eps = max(candidates) if candidates else None
+                except Exception:
+                    total_eps = None
 
-        async def build_card(item: dict) -> AnimeCardModel:
-            async with semaphore:
-                # Prefer provider episode counts if present to avoid Jikan fan-out.
-                total_eps = None
-                available = item.get("available_episodes")
-                if isinstance(available, dict):
-                    try:
-                        sub_count = available.get("sub")
-                        dub_count = available.get("dub")
-                        candidates = [c for c in [sub_count, dub_count] if isinstance(c, int)]
-                        total_eps = max(candidates) if candidates else None
-                    except Exception:
-                        total_eps = None
-
-                rating_score_task = run_in_threadpool(get_anilist_score, item["name"])
-                rating_class_task = run_in_threadpool(get_kitsu_age_rating, item["name"])
-                total_eps_task = (
-                    run_in_threadpool(get_jikan_total_episodes, item["name"])
-                    if total_eps is None
-                    else None
-                )
-
-                if total_eps_task is not None:
-                    rating_score, rating_classification, total_eps_fallback = await asyncio.gather(
-                        rating_score_task,
-                        rating_class_task,
-                        total_eps_task,
-                    )
-                    total_eps = total_eps_fallback
-                else:
-                    rating_score, rating_classification = await asyncio.gather(
-                        rating_score_task,
-                        rating_class_task,
-                    )
-
-                return AnimeCardModel(
+            data_list.append(
+                AnimeCardModel(
                     identifier=item["identifier"],
                     name=item["name"],
                     image=item["image"],
                     languages=item["languages"],
                     genres=item.get("genres"),
                     total_episode=total_eps,
-                    rating_score=rating_score,
-                    rating_classification=rating_classification,
+                    rating_score=None,
+                    rating_classification=None,
                 )
-
-        data_list = await asyncio.gather(*(build_card(item) for item in result["results"]))
+            )
 
         return PaginatedResponse(
             page=result["page"],
@@ -182,70 +139,32 @@ async def search_anime_with_genre(
         
         # Copying logic for now.
         
-        # Fetch images from Jikan in parallel for items with missing or invalid images
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = {}
-            for item in result["results"]:
-                image_url = item.get("image")
-                if not image_url or not image_url.strip().lower().startswith("http"):
-                    futures[executor.submit(get_jikan_image, item["name"])] = item
-            
-            for future in futures:
-                item = futures[future]
-                jikan_image = future.result()
-                if jikan_image:
-                    item["image"] = jikan_image
-                else:
-                    item["image"] = None
-        
-        semaphore = asyncio.Semaphore(10)
+        data_list = []
+        for item in result["results"]:
+            # Calculate total episodes from available_episodes
+            total_eps = None
+            available = item.get("available_episodes")
+            if isinstance(available, dict):
+                try:
+                    sub_count = available.get("sub")
+                    dub_count = available.get("dub")
+                    candidates = [c for c in [sub_count, dub_count] if isinstance(c, int)]
+                    total_eps = max(candidates) if candidates else None
+                except Exception:
+                    total_eps = None
 
-        async def build_card(item: dict) -> AnimeCardModel:
-            async with semaphore:
-                total_eps = None
-                available = item.get("available_episodes")
-                if isinstance(available, dict):
-                    try:
-                        sub_count = available.get("sub")
-                        dub_count = available.get("dub")
-                        candidates = [c for c in [sub_count, dub_count] if isinstance(c, int)]
-                        total_eps = max(candidates) if candidates else None
-                    except Exception:
-                        total_eps = None
-
-                rating_score_task = run_in_threadpool(get_anilist_score, item["name"])
-                rating_class_task = run_in_threadpool(get_kitsu_age_rating, item["name"])
-                total_eps_task = (
-                    run_in_threadpool(get_jikan_total_episodes, item["name"])
-                    if total_eps is None
-                    else None
-                )
-
-                if total_eps_task is not None:
-                    rating_score, rating_classification, total_eps_fallback = await asyncio.gather(
-                        rating_score_task,
-                        rating_class_task,
-                        total_eps_task,
-                    )
-                    total_eps = total_eps_fallback
-                else:
-                    rating_score, rating_classification = await asyncio.gather(
-                        rating_score_task,
-                        rating_class_task,
-                    )
-
-                return AnimeCardModel(
+            data_list.append(
+                AnimeCardModel(
                     identifier=item["identifier"],
                     name=item["name"],
                     image=item["image"],
                     languages=item["languages"],
                     genres=item.get("genres"),
                     total_episode=total_eps,
-                    rating_score=rating_score,
-                    rating_classification=rating_classification,
+                    rating_score=None,
+                    rating_classification=None,
                 )
-
-        data_list = await asyncio.gather(*(build_card(item) for item in result["results"]))
+            )
 
         return PaginatedResponse(
             page=result["page"],

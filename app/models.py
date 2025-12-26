@@ -6,24 +6,6 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 
 
-class SearchResultModel(BaseModel):
-    """Model for search results"""
-    name: str
-    identifier: str
-    image: Optional[str] = None
-    languages: List[str]
-    total_episode: Optional[int] = None
-    rating_score: Optional[float] = None
-    rating_classification: Optional[str] = None
-
-
-class SearchResponse(BaseModel):
-    """Model for search response"""
-    query: str
-    total_results: int
-    results: List[SearchResultModel]
-
-
 class AnimeInfoModel(BaseModel):
     """Model for anime info"""
     name: Optional[str] = None

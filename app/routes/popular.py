@@ -13,7 +13,6 @@ from anipy_api.provider import FilterCapabilities
 
 from app.models import PaginatedResponse, AnimeCardModel
 from app.utils import (
-    get_jikan_image,
     get_jikan_total_episodes, # kept but might be unused if jikan gives us this directly
     get_anilist_score,
     get_kitsu_age_rating,

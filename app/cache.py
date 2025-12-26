@@ -62,5 +62,4 @@ class TTLCache(Generic[T]):
 
 
 # Default caches used by routes
-SEARCH_CACHE: TTLCache = TTLCache(ttl_seconds=60, maxsize=512)
 BROWSE_CACHE: TTLCache = TTLCache(ttl_seconds=60, maxsize=256)
