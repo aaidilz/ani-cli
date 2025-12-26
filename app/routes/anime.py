@@ -135,6 +135,131 @@ async def browse_anime(
         )
 
 
+
+@router.get("/anime", response_model=PaginatedResponse, tags=["Discovery"])
+async def search_anime_with_genre(
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(20, ge=1, le=50, description="Items per page"),
+    query: Optional[str] = Query(None, description="Search query"),
+    genre: Optional[str] = Query(None, description="Filter by genre")
+):
+    """
+    Search anime with query and genre filter
+    """
+    try:
+        provider = get_provider()
+        
+        # Check if provider supports browse
+        if not hasattr(provider, "get_browse"):
+             raise HTTPException(
+                status_code=501,
+                detail="Provider does not support browsing"
+            )
+
+        genres_list = [genre] if genre else None
+        
+        # We can cache this too, but key needs to include query and genre
+        genres_key = tuple(genres_list) if genres_list else None
+        key = (page, limit, genres_key, query)
+        cached = BROWSE_CACHE.get(key)
+        
+        if cached is not None:
+            result = cached
+        else:
+            result = await run_in_threadpool(provider.get_browse, page, limit, genres_list, query)
+            BROWSE_CACHE.set(key, result)
+        
+        # Reuse the logic from browse_anime to fetch images and build cards
+        # Ideally this logic should be refactored into a helper function, but for now I will duplicate/adapt it inline or reuse if possible.
+        # Since the logic is quite long (fetching jikan images, building cards), I should probably extract it.
+        # But to be safe and quick, I will just call the same logic. 
+        # Actually, let's duplicate the logic for now to avoid breaking existing browse_anime during refactor risk, 
+        # or better: refactor `browse_anime` logic into a helper.
+        
+        # Let's see... `browse_anime` does exactly what we want, just with different params to `get_browse`.
+        # But `browse_anime` takes `genres` as List[str]. Here we receive `genre` as single str (based on request).
+        # Wait, request says `genre=Action`, singular. 
+        
+        # Copying logic for now.
+        
+        # Fetch images from Jikan in parallel for items with missing or invalid images
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = {}
+            for item in result["results"]:
+                image_url = item.get("image")
+                if not image_url or not image_url.strip().lower().startswith("http"):
+                    futures[executor.submit(get_jikan_image, item["name"])] = item
+            
+            for future in futures:
+                item = futures[future]
+                jikan_image = future.result()
+                if jikan_image:
+                    item["image"] = jikan_image
+                else:
+                    item["image"] = None
+        
+        semaphore = asyncio.Semaphore(10)
+
+        async def build_card(item: dict) -> AnimeCardModel:
+            async with semaphore:
+                total_eps = None
+                available = item.get("available_episodes")
+                if isinstance(available, dict):
+                    try:
+                        sub_count = available.get("sub")
+                        dub_count = available.get("dub")
+                        candidates = [c for c in [sub_count, dub_count] if isinstance(c, int)]
+                        total_eps = max(candidates) if candidates else None
+                    except Exception:
+                        total_eps = None
+
+                rating_score_task = run_in_threadpool(get_anilist_score, item["name"])
+                rating_class_task = run_in_threadpool(get_kitsu_age_rating, item["name"])
+                total_eps_task = (
+                    run_in_threadpool(get_jikan_total_episodes, item["name"])
+                    if total_eps is None
+                    else None
+                )
+
+                if total_eps_task is not None:
+                    rating_score, rating_classification, total_eps_fallback = await asyncio.gather(
+                        rating_score_task,
+                        rating_class_task,
+                        total_eps_task,
+                    )
+                    total_eps = total_eps_fallback
+                else:
+                    rating_score, rating_classification = await asyncio.gather(
+                        rating_score_task,
+                        rating_class_task,
+                    )
+
+                return AnimeCardModel(
+                    identifier=item["identifier"],
+                    name=item["name"],
+                    image=item["image"],
+                    languages=item["languages"],
+                    genres=item.get("genres"),
+                    total_episode=total_eps,
+                    rating_score=rating_score,
+                    rating_classification=rating_classification,
+                )
+
+        data_list = await asyncio.gather(*(build_card(item) for item in result["results"]))
+
+        return PaginatedResponse(
+            page=result["page"],
+            has_next=result["has_next"],
+            data=data_list
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to search anime: {str(e)}"
+        )
+
+
 @router.get("/anime/{identifier}", response_model=AnimeInfoModel, tags=["Anime Info"])
 async def get_anime_info(
     identifier: str = Path(..., description="Anime identifier")

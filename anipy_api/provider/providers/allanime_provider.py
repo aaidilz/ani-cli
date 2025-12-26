@@ -400,7 +400,7 @@ class AllAnimeProvider(BaseProvider):
                     )
         return streams
 
-    def get_browse(self, page: int = 1, limit: int = 20, genres: List[str] = None) -> dict:
+    def get_browse(self, page: int = 1, limit: int = 20, genres: List[str] = None, query: str = None) -> dict:
         variables = {
             "search": {
                 "allowAdult": False,
@@ -413,6 +413,9 @@ class AllAnimeProvider(BaseProvider):
 
         if genres:
             variables["search"]["genres"] = genres
+        
+        if query:
+            variables["search"]["query"] = query
 
         req = Request(
             "GET",
