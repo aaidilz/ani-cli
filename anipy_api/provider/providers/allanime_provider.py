@@ -160,7 +160,7 @@ class AllAnimeProvider(BaseProvider):
                     "search": {},
                     "limit": 26,
                     "page": 1,
-                    "countryOrigin": "ALL",
+                    "countryOrigin": "JP",
                 },
                 "query": SEARCH_QURY,
             },
@@ -408,7 +408,7 @@ class AllAnimeProvider(BaseProvider):
             },
             "limit": limit,
             "page": page,
-            "countryOrigin": "ALL",
+            "countryOrigin": "JP",
         }
 
         if genres:

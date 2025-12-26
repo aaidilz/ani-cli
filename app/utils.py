@@ -172,3 +172,22 @@ def get_kitsu_age_rating(anime_name: str) -> Optional[str]:
         return None
     except Exception:
         return None
+    except Exception:
+        return None
+
+
+@lru_cache(maxsize=32)
+def get_jikan_top_anime(page: int = 1, limit: int = 20) -> list[dict]:
+    """Fetch top anime from Jikan API v4.
+    
+    Returns a list of dicts containing raw Jikan data.
+    """
+    try:
+        url = "https://api.jikan.moe/v4/top/anime"
+        params = {"page": page, "limit": limit, "filter": "bypopularity"}
+        response = _get_http_session().get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("data", [])
+    except Exception:
+        return []
